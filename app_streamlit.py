@@ -172,6 +172,24 @@ st.markdown(
       }
       div[data-testid="stMetricValue"] { font-size: 1.35rem; color: var(--tuatara); }
 
+      /* Keep card section headers readable, not oversized serif */
+      h4 { font-size: 1.02rem !important; font-weight: 600; margin: 0 0 .4rem !important; }
+
+      /* Plan summary callout */
+      .plan-summary {
+        background: #FBF0EB; border: 1px solid #EFD9CF; border-left: 4px solid var(--japonica);
+        border-radius: 12px; padding: 1rem 1.2rem; margin: .3rem 0 1.1rem;
+      }
+      .plan-summary .lbl {
+        display: block; font-family: ui-monospace, "SF Mono", Menlo, monospace;
+        font-size: .7rem; letter-spacing: .09em; text-transform: uppercase;
+        color: var(--terracotta-dark); font-weight: 700; margin-bottom: .35rem;
+      }
+      .plan-summary p {
+        margin: 0; font-size: 1.02rem; line-height: 1.55; color: var(--tuatara);
+        font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      }
+
       hr { border-color: var(--line); }
     </style>
     """,
@@ -323,7 +341,11 @@ if run and request_text.strip():
     if plan is not None and totals is not None:
         st.session_state.history.append({"request": request_text.strip(), "cost": totals.cost})
 
-        st.markdown(f"### {plan.summary}")
+        st.markdown(
+            f"<div class='plan-summary'><span class='lbl'>Plan summary</span>"
+            f"<p>{plan.summary}</p></div>",
+            unsafe_allow_html=True,
+        )
 
         plan_tab, json_tab, cost_tab, usage_tab = st.tabs(["Plan", "JSON", "Cost", "Usage"])
 
