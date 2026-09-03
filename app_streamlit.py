@@ -8,6 +8,7 @@ print a harmless connection-reset warning.
 
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 import streamlit as st
@@ -27,6 +28,17 @@ from repo_agent import (
 )
 
 LOGO = Path("assets/datacamp-logo.png")
+
+
+def logo_link(path: Path, width: int, href: str) -> str:
+    """Center the logo and make it a link. st.image cannot do either."""
+    data = base64.b64encode(path.read_bytes()).decode()
+    return (
+        f"<a href='{href}' target='_blank' rel='noopener' "
+        "style='display:flex; justify-content:center; margin:.1rem 0 .7rem;'>"
+        f"<img src='data:image/png;base64,{data}' width='{width}' "
+        "style='max-width:100%;'/></a>"
+    )
 
 PROJECTS = {"Bookmarks API (Flask)": "sample_project"}
 
@@ -173,7 +185,10 @@ if "history" not in st.session_state:
 
 with st.sidebar:
     if LOGO.is_file():
-        st.image(str(LOGO), width=150)
+        st.markdown(
+            logo_link(LOGO, 190, "https://www.datacamp.com/blog"),
+            unsafe_allow_html=True,
+        )
 
     st.markdown(f"<div class='hero-badge'><span class='hero-dot'></span>{MODEL}</div>", unsafe_allow_html=True)
     st.caption(f"Turn cap {MAX_AGENT_TURNS}  ::  tools are read only")
