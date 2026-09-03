@@ -13,6 +13,7 @@ from pathlib import Path
 import streamlit as st
 
 from repo_agent import (
+    EFFORT_BETA,
     FEATURE_REQUEST,
     MAX_AGENT_TURNS,
     MODEL,
@@ -20,8 +21,12 @@ from repo_agent import (
     PRICE_CACHE_WRITE_5M,
     PRICE_INPUT,
     PRICE_OUTPUT,
+    PROGRESS_BETA,
+    SCOPED_SYSTEM_BETA,
     agent_events,
 )
+
+LOGO = Path("assets/datacamp-logo.png")
 
 PROJECTS = {"Bookmarks API (Flask)": "sample_project"}
 
@@ -32,17 +37,130 @@ EXAMPLES = {
     "API key rotation": "Let a user rotate an API key without losing access during the switch.",
 }
 
-st.set_page_config(page_title="Fable 5.1 Repo Agent", page_icon="::", layout="wide")
+# Fable 5.1 capabilities the workflow exercises. Shown in the sidebar so the demo
+# doubles as a map of what the model and the tutorial cover.
+CAPABILITIES = [
+    ("1M context, adaptive thinking", "Always-on reasoning, tuned with effort rather than an on/off switch."),
+    ("Staged effort", "high while planning, medium for routine file reads, high again for the final plan."),
+    ("Progress updates", "Readable status lines between tool calls, streamed live below."),
+    ("Read-only tool loop", "Three tools behind a path boundary. The model never touches the filesystem."),
+    ("Structured output", "The final plan is validated against a Pydantic schema."),
+    ("Prompt caching", "The repeated prefix is cached, so later turns read it back at $0.25 / MTok."),
+    ("Append-only history", "Turns are only appended, so thinking blocks stay valid."),
+    ("Refusal handling", "A declined request is surfaced as a state, not an exception."),
+]
+
+st.set_page_config(
+    page_title="Fable 5.1 Repository Agent",
+    page_icon=str(LOGO) if LOGO.is_file() else None,
+    layout="wide",
+)
 
 st.markdown(
     """
     <style>
-      .stApp { background-color: #f7f5f2; }
-      section[data-testid="stSidebar"] { background-color: #ffffff; }
-      div[data-testid="stMetricValue"] { font-size: 1.35rem; }
-      .progress-line { font-family: ui-monospace, monospace; font-size: 0.86rem; margin: 0.15rem 0; }
-      .tool-line { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #6b6b6b; margin-left: 1.2rem; }
-      .tool-refused { color: #b3261e; }
+      @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap');
+
+      :root {
+        --japonica:  #D97757;
+        --terracotta-dark: #C15F3C;
+        --pampas:    #F4F3EE;
+        --cloudy:    #B1ADA1;
+        --tuatara:   #373734;
+        --line:      #E7E3DA;
+        --muted:     #6B6862;
+        --card:      #FFFFFF;
+      }
+
+      /* Base type */
+      html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"] {
+        font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+      }
+      h1, h2, h3 { font-family: 'Fraunces', Georgia, 'Times New Roman', serif !important; color: var(--tuatara); letter-spacing: -0.01em; }
+
+      /* Blend the top toolbar into the cream background */
+      [data-testid="stHeader"] { background: transparent; }
+      [data-testid="stAppViewContainer"] { background: var(--pampas); }
+      [data-testid="stSidebar"] { border-right: 1px solid var(--line); }
+
+      .block-container { padding-top: 2.2rem; max-width: 1180px; }
+
+      /* Hero */
+      .hero-badge {
+        display:inline-flex; align-items:center; gap:.5rem;
+        background: #FBF0EB; color: var(--terracotta-dark);
+        border: 1px solid #EFD9CF; border-radius: 999px;
+        padding: .28rem .8rem; font-size: .78rem; font-weight: 600;
+        font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      }
+      .hero-dot { width:7px; height:7px; border-radius:50%; background: var(--japonica); }
+      .hero-title { font-size: 2.5rem; font-weight: 600; margin: .55rem 0 .35rem; line-height: 1.08; }
+      .hero-sub { color: var(--muted); font-size: 1.02rem; max-width: 720px; margin-bottom: .2rem; }
+
+      /* Buttons: primary = terracotta, secondary = white card */
+      .stButton > button {
+        border-radius: 10px; font-weight: 600; transition: all .15s ease;
+        border: 1px solid var(--line);
+      }
+      .stButton > button[kind="primary"] {
+        background: var(--japonica); border-color: var(--japonica); color: #fff;
+        box-shadow: 0 1px 2px rgba(55,55,52,.12);
+      }
+      .stButton > button[kind="primary"]:hover {
+        background: var(--terracotta-dark); border-color: var(--terracotta-dark);
+        transform: translateY(-1px); box-shadow: 0 4px 12px rgba(193,95,60,.28);
+      }
+      .stButton > button[kind="primary"]:active { transform: translateY(0); }
+      .stButton > button[kind="secondary"] {
+        background: var(--card); color: var(--tuatara);
+      }
+      .stButton > button[kind="secondary"]:hover {
+        border-color: var(--japonica); color: var(--terracotta-dark);
+        background: #FCF4F0; transform: translateY(-1px);
+      }
+
+      /* Inputs */
+      [data-testid="stTextArea"] textarea {
+        border-radius: 12px; border: 1px solid var(--line); background: var(--card);
+        font-size: .98rem;
+      }
+      [data-testid="stTextArea"] textarea:focus {
+        border-color: var(--japonica); box-shadow: 0 0 0 3px rgba(217,119,87,.15);
+      }
+
+      /* Progress + tool lines */
+      .progress-line {
+        font-size: .9rem; color: var(--tuatara); background: var(--card);
+        border: 1px solid var(--line); border-left: 3px solid var(--japonica);
+        border-radius: 8px; padding: .5rem .7rem; margin: .35rem 0;
+      }
+      .progress-turn { color: var(--japonica); font-weight: 600; font-family: ui-monospace, monospace; }
+      .tool-line {
+        font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .8rem;
+        color: var(--muted); margin: .12rem 0 .12rem 1.4rem;
+      }
+      .tool-line .badge-ok { color: #3B7A57; font-weight: 600; }
+      .tool-refused .badge-no { color: #B3261E; font-weight: 600; }
+
+      /* Capability rows */
+      .cap { padding: .5rem 0; border-bottom: 1px solid var(--line); }
+      .cap:last-child { border-bottom: none; }
+      .cap-name { font-weight: 600; font-size: .86rem; color: var(--tuatara); }
+      .cap-desc { font-size: .78rem; color: var(--muted); line-height: 1.35; margin-top: .1rem; }
+
+      /* Tabs */
+      .stTabs [data-baseweb="tab-list"] { gap: .3rem; border-bottom: 1px solid var(--line); }
+      .stTabs [data-baseweb="tab"] { font-weight: 600; color: var(--muted); }
+      .stTabs [aria-selected="true"] { color: var(--terracotta-dark) !important; }
+      .stTabs [data-baseweb="tab-highlight"] { background: var(--japonica) !important; }
+
+      [data-testid="stMetric"] {
+        background: var(--card); border: 1px solid var(--line);
+        border-radius: 12px; padding: .8rem 1rem;
+      }
+      div[data-testid="stMetricValue"] { font-size: 1.35rem; color: var(--tuatara); }
+
+      hr { border-color: var(--line); }
     </style>
     """,
     unsafe_allow_html=True,
@@ -54,62 +172,106 @@ if "history" not in st.session_state:
 # ----------------------------------------------------------------- sidebar
 
 with st.sidebar:
-    logo = Path("assets/datacamp-logo.png")
-    if logo.is_file():
-        st.image(str(logo), width=140)
+    if LOGO.is_file():
+        st.image(str(LOGO), width=150)
 
-    st.markdown("### Repository agent")
-    st.caption(f"Model `{MODEL}`")
-    st.caption(f"Turn cap {MAX_AGENT_TURNS}. Tools are read only.")
+    st.markdown(f"<div class='hero-badge'><span class='hero-dot'></span>{MODEL}</div>", unsafe_allow_html=True)
+    st.caption(f"Turn cap {MAX_AGENT_TURNS}  ::  tools are read only")
 
     project_label = st.selectbox("Project", list(PROJECTS))
     project_root = PROJECTS[project_label]
 
-    st.markdown("**Examples**")
+    st.markdown("#### Try an example")
     for label, text in EXAMPLES.items():
         if st.button(label, width="stretch", key=f"ex_{label}"):
             st.session_state.request_text = text
 
+    with st.expander("What Fable 5.1 does here", expanded=False):
+        for name, desc in CAPABILITIES:
+            st.markdown(
+                f"<div class='cap'><div class='cap-name'>{name}</div>"
+                f"<div class='cap-desc'>{desc}</div></div>",
+                unsafe_allow_html=True,
+            )
+
+    with st.expander("Beta headers in use", expanded=False):
+        st.markdown(
+            f"- `{PROGRESS_BETA}`\n"
+            f"- `{EFFORT_BETA}`\n"
+            f"- `{SCOPED_SYSTEM_BETA}`"
+        )
+
+    with st.expander("Pricing (per MTok)", expanded=False):
+        st.markdown(
+            f"- Input  ${PRICE_INPUT:.2f}\n"
+            f"- Output  ${PRICE_OUTPUT:.2f}\n"
+            f"- Cache write (5m)  ${PRICE_CACHE_WRITE_5M:.2f}\n"
+            f"- Cache read  ${PRICE_CACHE_READ:.2f}"
+        )
+
     if st.session_state.history:
         spent = sum(run["cost"] for run in st.session_state.history)
         st.divider()
-        st.metric("Estimated session spend", f"${spent:.4f}")
+        st.metric("Session spend", f"${spent:.4f}")
         st.caption(f"{len(st.session_state.history)} runs this session")
 
-# -------------------------------------------------------------------- main
+# -------------------------------------------------------------------- hero
 
-st.title("Repository-Aware Developer Task Assistant")
-st.write(
-    "Describe a feature. The agent reads the project through read-only tools, "
-    "reports what it is looking at, and returns a plan grounded in real paths."
+st.markdown(
+    "<div class='hero-badge'><span class='hero-dot'></span>Powered by "
+    f"{MODEL}</div>",
+    unsafe_allow_html=True,
 )
+st.markdown("<div class='hero-title'>Repository-Aware Developer Task Assistant</div>", unsafe_allow_html=True)
+st.markdown(
+    "<div class='hero-sub'>Describe a feature. The agent reads the project through read-only tools, "
+    "reports what it is looking at, and returns a plan grounded in the files it actually opened.</div>",
+    unsafe_allow_html=True,
+)
+
+st.write("")
 
 request_text = st.text_area(
     "Feature request",
     value=st.session_state.get("request_text", FEATURE_REQUEST),
     height=110,
+    label_visibility="collapsed",
 )
 
 run = st.button("Plan the feature", type="primary")
 
+# -------------------------------------------------------------------- run
+
 if run and request_text.strip():
-    progress_box = st.container()
     lines: list[str] = []
     plan = None
     totals = None
     usage_rows = []
 
+    timeline = st.container()
+
     with st.status("Inspecting the project", expanded=True) as status:
+        stream_box = timeline.empty()
         for event in agent_events(request_text.strip(), project_root):
             kind = event["type"]
 
             if kind == "progress":
-                lines.append(f'<div class="progress-line">[{event["turn"]}] {event["message"]}</div>')
+                lines.append(
+                    f"<div class='progress-line'><span class='progress-turn'>turn {event['turn']}</span>&nbsp; "
+                    f"{event['message']}</div>"
+                )
             elif kind == "tool":
                 path = event.get("path") or ""
-                css = "tool-line tool-refused" if event["refused"] else "tool-line"
-                label = "refused" if event["refused"] else "read"
-                lines.append(f'<div class="{css}">{label} {event["name"]} {path}</div>')
+                if event["refused"]:
+                    lines.append(
+                        f"<div class='tool-line tool-refused'><span class='badge-no'>refused</span> "
+                        f"{event['name']} {path}</div>"
+                    )
+                else:
+                    lines.append(
+                        f"<div class='tool-line'><span class='badge-ok'>read</span> "
+                        f"{event['name']} {path}</div>"
+                    )
             elif kind == "usage":
                 usage = event["usage"]
                 usage_rows.append(
@@ -141,31 +303,35 @@ if run and request_text.strip():
                 plan, totals = event["plan"], event["totals"]
                 status.update(label="Plan ready", state="complete", expanded=False)
 
-            progress_box.markdown("".join(lines), unsafe_allow_html=True)
+            stream_box.markdown("".join(lines), unsafe_allow_html=True)
 
     if plan is not None and totals is not None:
         st.session_state.history.append({"request": request_text.strip(), "cost": totals.cost})
 
-        st.success(plan.summary)
+        st.markdown(f"### {plan.summary}")
 
-        plan_tab, json_tab, cost_tab = st.tabs(["Plan", "JSON", "Cost"])
+        plan_tab, json_tab, cost_tab, usage_tab = st.tabs(["Plan", "JSON", "Cost", "Usage"])
 
         with plan_tab:
             left, right = st.columns(2)
             with left:
-                st.subheader("Steps")
-                for step in plan.implementation_steps:
-                    st.markdown(f"- {step}")
-                st.subheader("Files")
-                for path in plan.files_to_modify:
-                    st.markdown(f"- `{path}`")
+                with st.container(border=True):
+                    st.markdown("#### Implementation steps")
+                    for i, step in enumerate(plan.implementation_steps, start=1):
+                        st.markdown(f"**{i}.** {step}")
+                with st.container(border=True):
+                    st.markdown("#### Files to modify")
+                    for path in plan.files_to_modify:
+                        st.markdown(f"- `{path}`")
             with right:
-                st.subheader("Risks")
-                for risk in plan.risks:
-                    st.markdown(f"- {risk}")
-                st.subheader("Tests")
-                for test in plan.tests:
-                    st.markdown(f"- {test}")
+                with st.container(border=True):
+                    st.markdown("#### Risks")
+                    for risk in plan.risks:
+                        st.markdown(f"- {risk}")
+                with st.container(border=True):
+                    st.markdown("#### Tests to add")
+                    for test in plan.tests:
+                        st.markdown(f"- {test}")
 
         with json_tab:
             st.json(plan.model_dump())
@@ -182,22 +348,28 @@ if run and request_text.strip():
             b.metric("Cache write", f"{totals.cache_write:,}")
             c.metric("Cache read", f"{totals.cache_read:,}")
             d.metric("Output", f"{totals.output:,}")
-            st.metric("Estimated run cost", f"${totals.cost:.4f}")
+            st.metric("Run cost", f"${totals.cost:.4f}")
 
-            breakdown = {
-                "fresh input": totals.fresh_input * PRICE_INPUT / 1_000_000,
-                "cache write": totals.cache_write * PRICE_CACHE_WRITE_5M / 1_000_000,
-                "cache read": totals.cache_read * PRICE_CACHE_READ / 1_000_000,
-                "output": totals.output * PRICE_OUTPUT / 1_000_000,
-            }
-            st.bar_chart(breakdown, horizontal=True, y_label="cost in dollars")
+            breakdown = [
+                {"line item": "fresh input", "cost": totals.fresh_input * PRICE_INPUT / 1_000_000},
+                {"line item": "cache write", "cost": totals.cache_write * PRICE_CACHE_WRITE_5M / 1_000_000},
+                {"line item": "cache read", "cost": totals.cache_read * PRICE_CACHE_READ / 1_000_000},
+                {"line item": "output", "cost": totals.output * PRICE_OUTPUT / 1_000_000},
+            ]
+            st.bar_chart(
+                breakdown, x="line item", y="cost",
+                horizontal=True, x_label="cost in dollars", color="#D97757",
+            )
             st.caption(
-                "Cache reads are the lowest-cost category in this run. Output is the "
-                "largest, so effort has more effect on this estimate than cache reads."
+                "Cache reads are the cheapest line on this bill. Output is almost "
+                "always the largest, which is why raising effort matters more to cost "
+                "than caching does."
             )
 
+        with usage_tab:
             if usage_rows:
                 st.dataframe(usage_rows, width="stretch", hide_index=True)
+            st.caption("Per-request token split across the inspection turns and the final plan.")
 
 elif run:
     st.warning("Write a feature request first.")
