@@ -12,18 +12,7 @@ venv/
 uvicorn.log
 uvicorn.err
 
-# Working files, not part of the code package
-Prompt.md
-re.md
-VERIFIED_FACTS.md
-verify.py
+# Working files: article, briefs, research, verification, SDK reference.
+# Not part of the reader package.
+_working/
 debug_*.py
-claude-fable-5-1-api-tutorial.md
-media_guidelines.md
-Article_Brief__Claude_Fable_5_1_API.md
-Article Brief_ Claude Fable 5.1 API.docx
-claude-fable-5-1/
-claude-fable-5-1-*.zip
-Ref/
-Researchs Files/
-Video Transcripts/
