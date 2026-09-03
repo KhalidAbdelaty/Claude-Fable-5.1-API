@@ -3,7 +3,7 @@
 A developer agent built on the Claude Fable 5.1 API. Give it a feature request
 and it inspects a local project through read-only tools across several turns,
 prints what it is looking at as it goes, and returns a validated implementation
-plan with a cache-aware cost breakdown.
+plan with a cache-aware cost estimate.
 
 The same workflow ships three ways: a local script, a FastAPI service, and a
 Streamlit UI.
@@ -13,7 +13,7 @@ Streamlit UI.
 - `repo_agent.py` covers the whole API path: first call, effort, system prompt, structured output, streaming, the tool loop, mid-conversation effort, turn-scoped instructions, prompt caching, cost, and refusals
 - `repo_tools.py` holds the three read-only tools and the path boundary that makes them safe
 - `app.py` exposes `POST /plan` and a server-sent-events `POST /plan/stream`
-- `app_streamlit.py` is the UI, rendering progress lines, the plan, and the cost split
+- `app_streamlit.py` is the UI, rendering progress lines, the plan, and the estimated cost split
 - `run.py` starts the UI on Windows without a noisy connection-reset warning
 - `sse_client.py` is a small client for checking the streaming endpoint
 - `sample_project/` is the Flask project the agent reads, with no rate limiting anywhere in it

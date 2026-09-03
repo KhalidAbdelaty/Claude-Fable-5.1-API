@@ -92,6 +92,12 @@ def get_text(response) -> str:
     return next((b.text for b in response.content if b.type == "text"), "")
 
 
+def refusal_category(response) -> str:
+    """Return a display-safe category for refusals whose category may be null."""
+    details = getattr(response, "stop_details", None)
+    return details.category if details and details.category else "unspecified"
+
+
 def status_lines(response) -> list[str]:
     """Pull the user-facing progress lines out of a turn that ended in tool_use.
 
@@ -165,7 +171,7 @@ def structured() -> None:
     )
 
     if response.stop_reason == "refusal":
-        print(f"Declined: {response.stop_details.category}")
+        print(f"Declined: {refusal_category(response)}")
         return
 
     result = response.parsed_output
@@ -254,7 +260,7 @@ class Totals:
             f"Cache write tokens: {self.cache_write}\n"
             f"Cache read tokens:  {self.cache_read}\n"
             f"Output tokens:      {self.output}\n"
-            f"Session cost:       ${self.cost:.4f}"
+            f"Estimated session cost: ${self.cost:.4f}"
         )
 
 
@@ -294,8 +300,7 @@ def agent_events(feature_request: str = FEATURE_REQUEST, project_root: str = PRO
         yield {"type": "usage", "label": f"turn {turn}", "usage": response.usage}
 
         if response.stop_reason == "refusal":
-            category = response.stop_details.category if response.stop_details else "unspecified"
-            yield {"type": "refusal", "category": category}
+            yield {"type": "refusal", "category": refusal_category(response)}
             return
 
         if response.stop_reason == "max_tokens":
@@ -536,9 +541,7 @@ def safe_plan(feature_request: str) -> str:
     )
 
     if response.stop_reason == "refusal":
-        details = response.stop_details
-        category = details.category if details else "unspecified"
-        return f"This request was declined ({category})."
+        return f"This request was declined ({refusal_category(response)})."
 
     return get_text(response)
 
@@ -555,7 +558,7 @@ def refusal() -> None:
     print(f"Stop reason: {response.stop_reason}")
     print(f"Content blocks: {len(response.content)}")
     if response.stop_details:
-        print(f"Category: {response.stop_details.category}")
+        print(f"Category: {refusal_category(response)}")
     print(f"\nWhat the application shows:\n{safe_plan(request)}")
 
 

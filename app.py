@@ -27,6 +27,7 @@ from repo_agent import (
     Totals,
     agent_system,
     plan_schema,
+    refusal_category,
     status_lines,
 )
 from repo_tools import TOOLS, ProjectReader
@@ -109,8 +110,10 @@ async def inspect(reader: ProjectReader, feature_request: str, on_progress=None)
         totals.add(response.usage)
 
         if response.stop_reason == "refusal":
-            category = response.stop_details.category if response.stop_details else "unspecified"
-            raise HTTPException(status_code=422, detail=f"request declined ({category})")
+            raise HTTPException(
+                status_code=422,
+                detail=f"request declined ({refusal_category(response)})",
+            )
 
         if response.stop_reason == "max_tokens":
             raise HTTPException(status_code=502, detail="model hit max_tokens before finishing")
@@ -198,8 +201,10 @@ async def write_plan(messages: list[dict]):
     )
 
     if response.stop_reason == "refusal":
-        category = response.stop_details.category if response.stop_details else "unspecified"
-        raise HTTPException(status_code=422, detail=f"request declined ({category})")
+        raise HTTPException(
+            status_code=422,
+            detail=f"request declined ({refusal_category(response)})",
+        )
 
     text = next((b.text for b in response.content if b.type == "text"), "")
     try:

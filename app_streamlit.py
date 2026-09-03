@@ -73,7 +73,7 @@ with st.sidebar:
     if st.session_state.history:
         spent = sum(run["cost"] for run in st.session_state.history)
         st.divider()
-        st.metric("Session spend", f"${spent:.4f}")
+        st.metric("Estimated session spend", f"${spent:.4f}")
         st.caption(f"{len(st.session_state.history)} runs this session")
 
 # -------------------------------------------------------------------- main
@@ -182,7 +182,7 @@ if run and request_text.strip():
             b.metric("Cache write", f"{totals.cache_write:,}")
             c.metric("Cache read", f"{totals.cache_read:,}")
             d.metric("Output", f"{totals.output:,}")
-            st.metric("Run cost", f"${totals.cost:.4f}")
+            st.metric("Estimated run cost", f"${totals.cost:.4f}")
 
             breakdown = {
                 "fresh input": totals.fresh_input * PRICE_INPUT / 1_000_000,
@@ -192,9 +192,8 @@ if run and request_text.strip():
             }
             st.bar_chart(breakdown, horizontal=True, y_label="cost in dollars")
             st.caption(
-                "Cache reads are the cheapest line on this bill. Output is almost "
-                "always the largest, which is why raising effort matters more to cost "
-                "than caching does."
+                "Cache reads are the lowest-cost category in this run. Output is the "
+                "largest, so effort has more effect on this estimate than cache reads."
             )
 
             if usage_rows:
